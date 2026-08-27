@@ -137,6 +137,25 @@ class TestSendChunking:
     """WhatsApp send() splits long messages into chunks."""
 
     @pytest.mark.asyncio
+    async def test_native_mention_sends_normalized_text_and_jid(self):
+        adapter = _make_adapter()
+        resp = MagicMock(status=200)
+        resp.json = AsyncMock(return_value={"messageId": "msg1"})
+        adapter._http_session.post = MagicMock(return_value=_AsyncCM(resp))
+
+        result = await adapter.send(
+            "chat1",
+            "Valeu, @5511999999999@s.whatsapp.net!",
+        )
+
+        assert result.success
+        assert adapter._http_session.post.call_args.kwargs["json"] == {
+            "chatId": "chat1",
+            "message": "Valeu, @5511999999999!",
+            "mentions": ["5511999999999@s.whatsapp.net"],
+        }
+
+    @pytest.mark.asyncio
     async def test_short_message_single_send(self):
         adapter = _make_adapter()
         resp = MagicMock(status=200)
@@ -228,4 +247,3 @@ class TestWhatsAppTier:
         from gateway.display_config import resolve_display_setting
         # TIER_MEDIUM has streaming: None (follow global), not False
         assert resolve_display_setting({}, "whatsapp", "streaming") is None
-
