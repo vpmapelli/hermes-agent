@@ -60,6 +60,26 @@ logger = logging.getLogger(__name__)
 # Inbound owner-typed WhatsApp text is prefixed at MessageEvent construction so
 # transcripts stay disambiguated even if downstream plugins fail before silent_ingest.
 _OWNER_REPLY_PREFIX = "[owner reply] "
+_OUTBOUND_NATIVE_MENTION_RE = re.compile(
+    r"(?<![\w@])@(?P<identifier>\+?\d[\d .()\-]*\d)(?:@s\.whatsapp\.net)?"
+)
+
+
+def _extract_native_mentions(content: str) -> tuple[str, list[str]]:
+    """Convert explicit numeric mentions into Baileys-native WhatsApp JIDs."""
+    mentions: list[str] = []
+
+    def _replace(match: re.Match[str]) -> str:
+        identifier = match.group("identifier")
+        digits = re.sub(r"\D", "", identifier)
+        if len(digits) < 8:
+            return match.group(0)
+        mention_jid = to_whatsapp_jid(identifier)
+        mentions.append(mention_jid)
+        return f"@{digits}"
+
+    normalized = _OUTBOUND_NATIVE_MENTION_RE.sub(_replace, content)
+    return normalized, list(dict.fromkeys(mentions))
 
 
 def _listener_pids_on_port(port: int) -> list:
@@ -960,10 +980,13 @@ class WhatsAppAdapter(WhatsAppBehaviorMixin, BasePlatformAdapter):
             sent_message_ids: list[str] = []
             last_message_id = None
             for idx, chunk in enumerate(chunks):
+                mention_text, mentions = _extract_native_mentions(chunk)
                 payload: Dict[str, Any] = {
                     "chatId": chat_id,
-                    "message": chunk,
+                    "message": mention_text,
                 }
+                if mentions:
+                    payload["mentions"] = mentions
                 if reply_to and idx == 0:
                     # Only reply-to on the first text chunk, even if the bridge
                     # response omits a parseable message id.

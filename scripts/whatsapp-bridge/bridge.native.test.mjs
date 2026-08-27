@@ -47,6 +47,19 @@ import {
 
 // -- quoted outbound text -------------------------------------------------
 {
+  const { content, options } = buildTextSendPayload('Olá, @Vinicius!', {
+    mentions: ['5511999999999@s.whatsapp.net'],
+  });
+
+  assert.deepEqual(content, {
+    text: 'Olá, @Vinicius!',
+    mentions: ['5511999999999@s.whatsapp.net'],
+  });
+  assert.deepEqual(options, {});
+  console.log('  ✓ text mentions remain native Baileys payload fields');
+}
+
+{
   const store = createBoundedMessageStore(2);
   store.remember({
     key: {
